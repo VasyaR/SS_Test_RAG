@@ -157,6 +157,56 @@ ollama pull llama3.2
 
 ## Implementation Details
 
+### Phase 2: Text Processing & Chunking
+
+#### Approach
+- **Method**: Recursive character text splitting with semantic awareness
+- **Chunk size**: 400-600 tokens (~300-450 words) for optimal embedding quality
+- **Overlap**: 50 tokens to maintain context across chunk boundaries
+- **Separator priority**: `\n\n` (paragraphs) → `\n` (lines) → `. ` (sentences) → ` ` (words)
+
+#### Chunking Logic
+Split articles into semantically coherent chunks while preserving:
+- Paragraph boundaries (primary)
+- Sentence boundaries (secondary)
+- Context through overlap
+
+#### Metadata Preservation
+Each chunk stores:
+- `chunk_id`: Unique identifier (article_id + chunk_index)
+- `article_id`: Parent article reference
+- `article_title`: For context
+- `article_url`: Source link
+- `chunk_index`: Position in article
+- `chunk_text`: The actual text content
+- `word_count`: For statistics
+- `associated_images`: Images near this chunk in original article
+
+#### Image-Chunk Association
+Images are distributed across chunks using a simple mathematical approach:
+- **First chunk (chunk 0)**: Gets first 1-2 images (featured images)
+- **Remaining chunks**: Remaining images distributed evenly across all other chunks
+- **Limit**: Maximum 2 images per chunk to avoid overload
+
+**Note**: This is a simplified approach that spreads images evenly by position, not by actual HTML proximity. A production system would track each image's position in the original HTML and associate it with the semantically closest chunk. For testing purposes, mathematical distribution is sufficient.
+
+#### Output Format
+Processed chunks saved to `data/processed/chunks.json`:
+```json
+[
+  {
+    "chunk_id": "article_1_chunk_0",
+    "article_id": 1,
+    "article_title": "...",
+    "article_url": "...",
+    "chunk_index": 0,
+    "chunk_text": "...",
+    "word_count": 450,
+    "associated_images": ["article_1_img_0.jpg"]
+  }
+]
+```
+
 ### Phase 1: Data Ingestion (Web Scraping)
 
 #### Approach
@@ -221,6 +271,11 @@ data/images/
   - [x] Documented scraping approach
   - [x] Web scraper implementation
   - [x] Test with articles (3 articles scraped, ~5K words total)
+- [x] Phase 2: Text Processing & Chunking
+  - [x] Documented chunking strategy
+  - [x] Chunking implementation (RecursiveCharacterTextSplitter)
+  - [x] Image-chunk association logic
+  - [x] Tested (71 chunks created, avg 66 words/chunk)
 
 ## Evaluation
 
