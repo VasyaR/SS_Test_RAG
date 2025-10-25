@@ -1,0 +1,38 @@
+# Web Scraping
+beautifulsoup4==4.12.3
+requests==2.31.0
+lxml==5.1.0
+
+# Text Processing & Embeddings
+sentence-transformers==3.3.1
+transformers==4.45.2
+torch==2.4.0
+nltk==3.8.1
+rank-bm25==0.2.2
+
+# Image Processing & CLIP
+Pillow==10.3.0
+ftfy==6.2.0  # Required for CLIP
+regex==2024.5.15  # Required for CLIP
+
+# Vector Database
+chromadb==0.5.20
+
+# LLM Integration
+ollama==0.4.5  # Python SDK for Ollama
+# Alternative: accelerate==0.34.2  # For HuggingFace models
+
+# Text Splitting
+langchain-text-splitters==0.3.2
+
+# UI
+gradio==5.9.1
+
+# Utilities
+tqdm==4.66.4
+numpy==1.26.4
+pandas==2.2.3
+
+# Development
+pytest==8.3.4
+black==24.10.0
