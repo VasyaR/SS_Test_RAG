@@ -35,5 +35,10 @@ This repository is in its initial state with only a README.md file present. The 
 When implementing this project, consider:
 - Python is likely the intended language
 
+## Project structure
+```
+├── RAG/        # Old project RAG for example, don't touch
+```
+
 ## Specialties
 

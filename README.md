@@ -276,6 +276,41 @@ data/images/
   - [x] Chunking implementation (RecursiveCharacterTextSplitter)
   - [x] Image-chunk association logic
   - [x] Tested (71 chunks created, avg 66 words/chunk)
+- [x] Phase 3: Text Embeddings & BM25
+  - [x] Documented text retrieval approach
+  - [x] Text embeddings implementation
+  - [x] BM25 index setup
+  - [x] Tested text retrieval (384-dim embeddings, hybrid search working)
+
+### Phase 3: Text Embeddings & BM25
+
+#### Approach
+**Hybrid Retrieval Strategy**: Combine keyword-based (BM25) and semantic (embeddings) search for optimal text retrieval.
+
+**Why Hybrid?**
+- **BM25**: Excels at exact keyword matches (e.g., "Llama 3.2" finds exact model names)
+- **Semantic**: Captures meaning (e.g., "AI safety" finds "alignment research", "responsible AI")
+- **Combination**: Leverages both strengths for better recall and precision
+
+**Text Embedding Model**
+- **Model**: `all-MiniLM-L6-v2` (sentence-transformers)
+- **Dimensions**: 384 (compact, fast)
+- **Why**: Lightweight, runs on CPU, good semantic quality for general text
+
+**BM25 Configuration**
+- **Library**: rank-bm25 (fast, pure Python)
+- **Tokenization**: NLTK word tokenizer
+- **Parameters**: Default k1=1.5, b=0.75 (standard BM25 settings)
+
+**Score Fusion**
+- **Formula**: `final_score = α * BM25_normalized + (1-α) * semantic_cosine_similarity`
+- **Default α**: 0.4 (60% semantic, 40% keyword)
+- **Normalization**: Min-max scaling for BM25 scores to [0,1] range
+
+**Caching Strategy**
+- Text embeddings saved to `data/embeddings/text_embeddings.pkl` (reuse on reload)
+- BM25 index saved to `data/cache/bm25_index.pkl`
+- Tokenized docs saved to `data/cache/tokenized_docs.pkl`
 
 ## Evaluation
 
