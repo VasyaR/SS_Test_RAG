@@ -155,13 +155,72 @@ ollama pull llama3.2
 
 [TODO: Add usage instructions after implementation]
 
+## Implementation Details
+
+### Phase 1: Data Ingestion (Web Scraping)
+
+#### Approach
+- **Target**: The Batch articles from https://www.deeplearning.ai/the-batch/
+- **Method**: BeautifulSoup4 for HTML parsing, requests for fetching
+- **Pagination**: Iterate through `/the-batch/page/N/` to collect multiple articles
+- **Rate limiting**: 1-2 second delays between requests to be respectful
+
+#### Data Extraction
+Each article contains:
+- **Title**: `<h1>` or article heading
+- **Date**: Publication date from metadata
+- **URL**: Direct link to full article
+- **Content**: Main article text (paragraphs)
+- **Images**: Featured image + inline images with URLs and alt text
+- **Tags**: Category tags if available
+
+#### Storage Structure
+```
+data/raw/
+  articles_batch_1.json      # First N articles
+  articles_batch_2.json      # Next N articles (if needed)
+data/images/
+  article_123_img_0.jpg      # Images named by article ID
+  article_123_img_1.jpg
+```
+
+#### Error Handling
+- Skip articles with missing critical fields (title, content)
+- Log failed image downloads but continue
+- Save progress incrementally (batch by batch)
+
+#### Current Limitations
+**Note**: The current scraper implementation is not ideal for production use:
+
+1. **URL Filtering**: Scrapes links from the homepage, but some lead to tag pages (`/the-batch/tag/...`) rather than actual articles. Tag pages lack proper article structure, so the scraper correctly skips them. Result: attempting 15 articles yielded only 3 valid articles.
+
+2. **Duplicate Handling**: Re-running the scraper will create duplicates:
+   - JSON files with the same `batch_name` get overwritten
+   - Images with the same article_id get overwritten
+   - No URL-based deduplication to detect already-scraped articles
+
+3. **Update Detection**: No mechanism to detect when articles on the site have been updated and need re-scraping.
+
+**For this project**: We proceed with 3 articles, which is sufficient for testing the full RAG pipeline (chunking, embeddings, retrieval, LLM integration).
+
+**Production improvements needed**:
+- Better URL filtering (sitemap, RSS feed, or link pattern matching)
+- Duplicate detection using URL hashes or database tracking
+- Update detection by comparing article modification dates or content hashes
+- Incremental scraping that only fetches new/updated articles
+
 ## Development Progress
 
 - [x] Phase 0: Setup & Planning
   - [x] README created
-  - [ ] Project structure folders
-  - [ ] requirements.txt
-  - [ ] .gitignore updates
+  - [x] Project structure folders
+  - [x] requirements.txt
+  - [x] .gitignore updates
+  - [x] Dependencies installed
+- [x] Phase 1: Data Ingestion
+  - [x] Documented scraping approach
+  - [x] Web scraper implementation
+  - [x] Test with articles (3 articles scraped, ~5K words total)
 
 ## Evaluation
 
