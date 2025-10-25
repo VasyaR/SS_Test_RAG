@@ -281,6 +281,11 @@ data/images/
   - [x] Text embeddings implementation
   - [x] BM25 index setup
   - [x] Tested text retrieval (384-dim embeddings, hybrid search working)
+- [x] Phase 4: Image Embeddings with CLIP
+  - [x] Documented image embedding approach
+  - [x] CLIP implementation
+  - [x] Generated image embeddings
+  - [x] Tested image retrieval (10 images, 512-dim embeddings, text-to-image working)
 
 ### Phase 3: Text Embeddings & BM25
 
@@ -311,6 +316,37 @@ data/images/
 - Text embeddings saved to `data/embeddings/text_embeddings.pkl` (reuse on reload)
 - BM25 index saved to `data/cache/bm25_index.pkl`
 - Tokenized docs saved to `data/cache/tokenized_docs.pkl`
+
+### Phase 4: Image Embeddings with CLIP
+
+#### Approach
+**Visual-Semantic Embeddings**: Use CLIP to generate embeddings that understand both images and text in the same vector space.
+
+**Why CLIP?**
+- **Multimodal**: Trained on 400M image-text pairs, understands visual concepts
+- **Zero-shot**: Can match images to text queries without fine-tuning
+- **Same embedding space**: Text and image embeddings are directly comparable
+- **Free/Local**: OpenAI's CLIP models are open-source
+
+**CLIP Model**
+- **Model**: `openai/clip-vit-base-patch32`
+- **Dimensions**: 512 (shared text/image space)
+- **Why**: Good balance of speed and quality, runs on CPU
+
+**Image Processing**
+- **Preprocessing**: CLIP's built-in transforms (resize, normalize)
+- **Input size**: 224x224 pixels (CLIP standard)
+- **Error handling**: Skip corrupted/missing images gracefully
+
+**Image-Text Query Support**
+- **Text query**: Encode query text with CLIP text encoder → compare to image embeddings
+- **Image query**: Encode query image with CLIP image encoder → find similar images
+- **Both supported** in the same embedding space
+
+**Caching Strategy**
+- Image embeddings saved to `data/embeddings/image_embeddings.pkl`
+- Image metadata (paths, article_ids) saved to `data/embeddings/image_metadata.json`
+- Reuse on reload (only embed new images)
 
 ## Evaluation
 
