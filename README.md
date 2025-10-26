@@ -73,10 +73,15 @@ Gradio UI Display
 ## Implementation Approach
 
 ### Chunking Strategy
-- **Method**: Paragraph-based with 200-500 token chunks
+- **Method**: Paragraph-based with 500 character chunks (~100-125 tokens)
 - **Why**: Articles are well-structured with clear paragraphs
-- **Overlap**: 50 tokens to maintain context across chunks
-- **Image linking**: Associate images with nearest text chunks based on HTML structure
+- **Overlap**: 50 characters to maintain context across chunks
+- **Title inclusion**: Article title prepended to each chunk for better BM25/semantic search
+- **Image linking**: CLIP-based semantic matching
+  - Images matched to chunks via CLIP vision-language similarity
+  - Normalized similarity threshold: 0.5 (balanced coverage vs precision)
+  - Result: ~50% images assigned, ~97% chunks have images
+  - Unassigned images are typically decorative/generic with low semantic relevance
 
 ### Multimodal Fusion
 - **Text score**: `α * BM25_score + (1-α) * Semantic_score`
@@ -239,25 +244,33 @@ data/images/
 - Log failed image downloads but continue
 - Save progress incrementally (batch by batch)
 
-#### Current Limitations
-**Note**: The current scraper implementation is not ideal for production use:
+#### Phase 6.5 Enhancements (Implemented)
 
-1. **URL Filtering**: Scrapes links from the homepage, but some lead to tag pages (`/the-batch/tag/...`) rather than actual articles. Tag pages lack proper article structure, so the scraper correctly skips them. Result: attempting 15 articles yielded only 3 valid articles.
+**Enhanced Metadata Extraction**:
+- ✅ Date extraction via JSON-LD, time tags, meta tags (fallback chain)
+- ✅ Multi-category support (articles can belong to multiple categories)
+- ✅ Removed author field (not used by The Batch)
 
-2. **Duplicate Handling**: Re-running the scraper will create duplicates:
-   - JSON files with the same `batch_name` get overwritten
-   - Images with the same article_id get overwritten
-   - No URL-based deduplication to detect already-scraped articles
+**Multi-Category Scraping**:
+- ✅ Scrape from 9 category tabs: Weekly Issues, Andrew's Letters, Data Points, ML Research, Business, Science, Culture, Hardware, AI Careers
+- ✅ Balanced distribution: specify articles per category
+- ✅ CLI support: `python scraper.py --multi-category --per-category 2`
 
-3. **Update Detection**: No mechanism to detect when articles on the site have been updated and need re-scraping.
+**Image Handling**:
+- ✅ RGBA/P images saved as PNG (not JPEG)
+- ✅ data: URI placeholders filtered out
+- ✅ Extension tracking in metadata
 
-**For this project**: We proceed with 3 articles, which is sufficient for testing the full RAG pipeline (chunking, embeddings, retrieval, LLM integration).
+**Incremental Scraping**:
+- ✅ URL-based deduplication
+- ✅ Skip existing articles automatically
+- ✅ Pagination support (multiple pages)
 
-**Production improvements needed**:
-- Better URL filtering (sitemap, RSS feed, or link pattern matching)
-- Duplicate detection using URL hashes or database tracking
-- Update detection by comparing article modification dates or content hashes
-- Incremental scraping that only fetches new/updated articles
+**Current Dataset**: 18 articles across all 9 categories with proper dates and metadata.
+
+#### Remaining Limitations
+
+**Content-based update detection**: No mechanism to detect when already-scraped articles have been edited (only detects new articles by URL).
 
 ## Development Progress
 
@@ -297,6 +310,11 @@ data/images/
   - [x] Image retrieval implementation
   - [x] Multimodal fusion implementation
   - [x] Tested end-to-end retrieval (hybrid scores, metadata filtering working)
+- [ ] Phase 6.5: System Optimizations
+  - [ ] Enhanced metadata extraction (date, author from HTML)
+  - [ ] CLIP-based semantic image-chunk assignment
+  - [ ] Incremental scraping with deduplication
+  - [ ] Database rebuild with optimizations
 
 ### Phase 3: Text Embeddings & BM25
 

@@ -5,7 +5,9 @@ Splits articles into optimal-sized chunks for embedding while preserving
 context and associating relevant images with each chunk.
 """
 
+import argparse
 import json
+from collections import defaultdict
 from pathlib import Path
 from typing import Optional
 
@@ -81,6 +83,9 @@ class ArticleChunker:
                 images=images
             )
 
+            # Prepend article title to chunk text for better search
+            searchable_text = f"{article_title}\n\n{chunk_text}"
+
             chunk = {
                 'chunk_id': f"article_{article_id}_chunk_{idx}",
                 'article_id': article_id,
@@ -88,7 +93,7 @@ class ArticleChunker:
                 'article_url': article_url,
                 'chunk_index': idx,
                 'total_chunks': len(text_chunks),
-                'chunk_text': chunk_text,
+                'chunk_text': searchable_text,
                 'word_count': word_count,
                 'associated_images': associated_images
             }
@@ -206,30 +211,93 @@ class ArticleChunker:
 
         return all_chunks
 
+    def apply_clip_matching(
+        self,
+        chunks_path: str,
+        images_dir: str,
+        threshold: float = 0.5
+    ) -> list[dict]:
+        """
+        Apply CLIP-based image matching to existing chunks.
+
+        Args:
+            chunks_path: Path to chunks JSON
+            images_dir: Images directory
+            threshold: CLIP similarity threshold
+
+        Returns:
+            Updated chunks with CLIP assignments
+        """
+        from clip_image_matcher import CLIPImageMatcher
+
+        # Load chunks
+        with open(chunks_path, 'r') as f:
+            chunks = json.load(f)
+
+        print(f"\nApplying CLIP matching to {len(chunks)} chunks...")
+        matcher = CLIPImageMatcher(threshold=threshold)
+        images_path = Path(images_dir)
+
+        # Group chunks by article
+        from collections import defaultdict
+        article_chunks = defaultdict(list)
+        for chunk in chunks:
+            article_chunks[chunk['article_id']].append(chunk)
+
+        # Process each article's chunks
+        updated_chunks = []
+        for article_id, art_chunks in article_chunks.items():
+            # Clear existing assignments
+            for chunk in art_chunks:
+                chunk['associated_images'] = []
+
+            # Apply CLIP matching
+            matched_chunks = matcher.match_images_to_chunks(
+                chunks=art_chunks,
+                images_dir=images_path,
+                article_id=article_id
+            )
+            updated_chunks.extend(matched_chunks)
+
+        # Save updated chunks
+        with open(chunks_path, 'w') as f:
+            json.dump(updated_chunks, f, indent=2, ensure_ascii=False)
+
+        print(f"CLIP matching complete. Updated: {chunks_path}")
+        return updated_chunks
+
 
 def main():
-    """Test the chunking module on scraped articles."""
-    # Initialize chunker
-    chunker = ArticleChunker(
-        chunk_size=600,  # ~450 words
-        chunk_overlap=75  # ~50-60 words overlap
-    )
+    """CLI for chunking. Run: python chunking.py --help for options."""
+    parser = argparse.ArgumentParser(description='Chunk articles and apply CLIP matching')
+    parser.add_argument('--apply-clip', action='store_true', help='Apply CLIP matching to existing chunks')
+    parser.add_argument('--threshold', type=float, default=0.5, help='CLIP similarity threshold')
+    args = parser.parse_args()
 
-    # Process articles
-    input_path = "../data/raw/articles_test_batch.json"
-    output_path = "../data/processed/chunks.json"
+    chunker = ArticleChunker(chunk_size=500, chunk_overlap=50)
 
-    chunks = chunker.process_articles(input_path, output_path)
+    if args.apply_clip:
+        chunks = chunker.apply_clip_matching(
+            chunks_path='../data/processed/chunks.json',
+            images_dir='../data/images',
+            threshold=args.threshold
+        )
+    else:
+        chunks = chunker.process_articles(
+            input_path='../data/raw/articles_test_batch.json',
+            output_path='../data/processed/chunks.json'
+        )
 
     # Display sample chunks
-    print("\n=== Sample Chunks ===")
-    for i, chunk in enumerate(chunks[:3]):
-        print(f"\nChunk {i+1}:")
-        print(f"  ID: {chunk['chunk_id']}")
-        print(f"  Article: {chunk['article_title'][:40]}...")
-        print(f"  Words: {chunk['word_count']}")
-        print(f"  Images: {len(chunk['associated_images'])}")
-        print(f"  Text preview: {chunk['chunk_text'][:150]}...")
+    if chunks:
+        print("\n=== Sample Chunks ===")
+        for i, chunk in enumerate(chunks[:3]):
+            print(f"\nChunk {i+1}:")
+            print(f"  ID: {chunk['chunk_id']}")
+            print(f"  Article: {chunk['article_title'][:40]}...")
+            print(f"  Words: {chunk['word_count']}")
+            print(f"  Images: {len(chunk['associated_images'])}")
+            print(f"  Text preview: {chunk['chunk_text'][:150]}...")
 
 
 if __name__ == "__main__":
