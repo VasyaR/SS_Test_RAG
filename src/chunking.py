@@ -8,6 +8,7 @@ context and associating relevant images with each chunk.
 import argparse
 import json
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -64,8 +65,19 @@ class ArticleChunker:
         article_id = article['article_id']
         article_title = article['title']
         article_url = article['url']
+        article_date = article.get('date', None)
+        article_categories = article.get('categories', [])
         content = article['content']
         images = article.get('images', [])
+
+        # Convert ISO date to Unix timestamp for Qdrant range filtering
+        article_timestamp = None
+        if article_date:
+            try:
+                dt = datetime.fromisoformat(article_date.replace('Z', '+00:00'))
+                article_timestamp = int(dt.timestamp())
+            except Exception:
+                pass
 
         # Split text into chunks
         text_chunks = self.text_splitter.split_text(content)
@@ -91,6 +103,9 @@ class ArticleChunker:
                 'article_id': article_id,
                 'article_title': article_title,
                 'article_url': article_url,
+                'article_date': article_date,
+                'article_timestamp': article_timestamp,
+                'article_categories': article_categories,
                 'chunk_index': idx,
                 'total_chunks': len(text_chunks),
                 'chunk_text': searchable_text,

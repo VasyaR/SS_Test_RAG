@@ -16,7 +16,7 @@ ftfy==6.2.0  # Required for CLIP
 regex==2024.5.15  # Required for CLIP
 
 # Vector Database
-chromadb==0.5.20
+qdrant-client==1.12.1
 
 # LLM Integration
 ollama==0.4.5  # Python SDK for Ollama

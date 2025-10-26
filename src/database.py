@@ -1,264 +1,151 @@
 """
-Vector database operations using ChromaDB for multimodal retrieval.
+Vector database with Qdrant for multimodal retrieval.
 
-Handles storage and retrieval of text and image embeddings with metadata
-filtering support.
+Handles text and image embeddings with advanced filtering.
 """
 
 import json
 import pickle
+from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
-import chromadb
 import numpy as np
-from chromadb.config import Settings
+from qdrant_client import QdrantClient
+from qdrant_client.models import (
+    Distance,
+    FieldCondition,
+    Filter,
+    MatchAny,
+    PointStruct,
+    Range,
+    VectorParams,
+)
 
 
 class MultimodalDB:
-    """Multimodal vector database with ChromaDB."""
+    """Multimodal vector database with Qdrant."""
 
-    def __init__(self, persist_directory: str = "../data/chroma_db"):
+    def __init__(self, persist_directory: str = "../data/qdrant_db"):
         """
-        Initialize ChromaDB client and collections.
+        Initialize Qdrant client.
 
         Args:
             persist_directory: Directory for persistent storage
         """
         self.persist_directory = Path(persist_directory)
         self.persist_directory.mkdir(parents=True, exist_ok=True)
+        self.client = QdrantClient(path=str(self.persist_directory))
+        self.text_collection = "text_chunks"
+        self.image_collection = "images"
 
-        # Initialize ChromaDB with persistent storage
-        self.client = chromadb.PersistentClient(
-            path=str(self.persist_directory),
-            settings=Settings(
-                anonymized_telemetry=False,
-                allow_reset=True
-            )
-        )
-
-        # Collections will be created/loaded on demand
-        self.text_collection = None
-        self.image_collection = None
-
-    def initialize_text_collection(
-        self,
-        chunks_path: str,
-        embeddings_path: str,
-        collection_name: str = "text_chunks"
-    ) -> chromadb.Collection:
-        """
-        Initialize text chunks collection with embeddings and metadata.
-
-        Args:
-            chunks_path: Path to chunks JSON
-            embeddings_path: Path to text embeddings pickle
-            collection_name: Name for the collection
-
-        Returns:
-            ChromaDB collection object
-        """
+    def initialize_text_collection(self, chunks_path: str, embeddings_path: str):
+        """Initialize text collection with chunks and embeddings."""
         print(f"\n=== Initializing Text Collection ===")
 
-        # Load chunks
         with open(chunks_path, 'r', encoding='utf-8') as f:
             chunks = json.load(f)
-
-        # Load embeddings
         with open(embeddings_path, 'rb') as f:
             embeddings = pickle.load(f)
 
         print(f"Loaded {len(chunks)} chunks and {len(embeddings)} embeddings")
 
-        # Get or create collection
-        try:
-            self.text_collection = self.client.get_collection(name=collection_name)
-            print(f"Loaded existing collection: {collection_name}")
-            print(f"Collection count: {self.text_collection.count()}")
-        except Exception:
-            # Create new collection
-            self.text_collection = self.client.create_collection(
-                name=collection_name,
-                metadata={"description": "Text chunks with semantic embeddings"}
-            )
-            print(f"Created new collection: {collection_name}")
+        if self.client.collection_exists(self.text_collection):
+            self.client.delete_collection(self.text_collection)
 
-            # Prepare data for ChromaDB
-            ids = [chunk['chunk_id'] for chunk in chunks]
-            documents = [chunk['chunk_text'] for chunk in chunks]
-            metadatas = [
-                {
+        self.client.create_collection(
+            collection_name=self.text_collection,
+            vectors_config=VectorParams(size=384, distance=Distance.COSINE),
+        )
+
+        points = [
+            PointStruct(
+                id=idx,
+                vector=emb.tolist(),
+                payload={
+                    'chunk_id': chunk['chunk_id'],
                     'article_id': chunk['article_id'],
                     'article_title': chunk['article_title'],
                     'article_url': chunk['article_url'],
+                    'article_date': chunk.get('article_date', ''),
+                    'article_timestamp': chunk.get('article_timestamp'),
+                    'article_categories': chunk.get('article_categories', []),
                     'chunk_index': chunk['chunk_index'],
                     'total_chunks': chunk['total_chunks'],
-                    'word_count': chunk['word_count']
+                    'word_count': chunk['word_count'],
+                    'chunk_text': chunk['chunk_text']
                 }
-                for chunk in chunks
-            ]
+            )
+            for idx, (chunk, emb) in enumerate(zip(chunks, embeddings))
+        ]
 
-            # Add to collection in batches
-            batch_size = 100
-            for i in range(0, len(ids), batch_size):
-                batch_ids = ids[i:i + batch_size]
-                batch_docs = documents[i:i + batch_size]
-                batch_meta = metadatas[i:i + batch_size]
-                batch_embs = embeddings[i:i + batch_size].tolist()
+        for i in range(0, len(points), 100):
+            self.client.upsert(collection_name=self.text_collection, points=points[i:i+100])
 
-                self.text_collection.add(
-                    ids=batch_ids,
-                    documents=batch_docs,
-                    metadatas=batch_meta,
-                    embeddings=batch_embs
-                )
+        print(f"Added {len(points)} text chunks")
 
-            print(f"Added {len(ids)} text chunks to collection")
-
-        return self.text_collection
-
-    def initialize_image_collection(
-        self,
-        metadata_path: str,
-        embeddings_path: str,
-        collection_name: str = "images"
-    ) -> chromadb.Collection:
-        """
-        Initialize images collection with embeddings and metadata.
-
-        Args:
-            metadata_path: Path to image metadata JSON
-            embeddings_path: Path to image embeddings pickle
-            collection_name: Name for the collection
-
-        Returns:
-            ChromaDB collection object
-        """
+    def initialize_image_collection(self, metadata_path: str, embeddings_path: str):
+        """Initialize image collection with metadata and embeddings."""
         print(f"\n=== Initializing Image Collection ===")
 
-        # Load metadata
         with open(metadata_path, 'r', encoding='utf-8') as f:
             metadata = json.load(f)
-
-        # Load embeddings
         with open(embeddings_path, 'rb') as f:
             embeddings = pickle.load(f)
 
         print(f"Loaded {len(metadata)} images and {len(embeddings)} embeddings")
 
-        # Get or create collection
-        try:
-            self.image_collection = self.client.get_collection(name=collection_name)
-            print(f"Loaded existing collection: {collection_name}")
-            print(f"Collection count: {self.image_collection.count()}")
-        except Exception:
-            # Create new collection
-            self.image_collection = self.client.create_collection(
-                name=collection_name,
-                metadata={"description": "Image embeddings with CLIP"}
-            )
-            print(f"Created new collection: {collection_name}")
+        if self.client.collection_exists(self.image_collection):
+            self.client.delete_collection(self.image_collection)
 
-            # Prepare data for ChromaDB
-            ids = [f"img_{i}" for i in range(len(metadata))]
-            documents = [meta['image_path'] for meta in metadata]
-            metadatas = [
-                {
+        self.client.create_collection(
+            collection_name=self.image_collection,
+            vectors_config=VectorParams(size=512, distance=Distance.COSINE),
+        )
+
+        points = [
+            PointStruct(
+                id=idx,
+                vector=emb.tolist(),
+                payload={
                     'article_id': meta['article_id'],
                     'article_title': meta['article_title'],
                     'image_path': meta['image_path'],
-                    'chunk_id': meta['chunk_id'],
                     'full_path': meta['full_path']
                 }
-                for meta in metadata
-            ]
-
-            # Add to collection
-            self.image_collection.add(
-                ids=ids,
-                documents=documents,
-                metadatas=metadatas,
-                embeddings=embeddings.tolist()
             )
+            for idx, (meta, emb) in enumerate(zip(metadata, embeddings))
+        ]
 
-            print(f"Added {len(ids)} images to collection")
+        self.client.upsert(collection_name=self.image_collection, points=points)
+        print(f"Added {len(points)} images")
 
-        return self.image_collection
-
-    def query_text(
-        self,
-        query_embedding,
-        n_results: int = 5,
-        where: Optional[dict] = None
-    ) -> dict:
-        """
-        Query text chunks collection.
-
-        Args:
-            query_embedding: Query embedding (numpy array or list)
-            n_results: Number of results to return
-            where: Optional metadata filter
-
-        Returns:
-            Query results from ChromaDB
-        """
-        if self.text_collection is None:
-            raise ValueError("Text collection not initialized")
-
-        # Convert numpy to list if needed
-        if hasattr(query_embedding, 'tolist'):
+    def query_text(self, query_embedding, n_results: int = 5, query_filter: dict | None = None) -> list:
+        """Query text chunks."""
+        if isinstance(query_embedding, np.ndarray):
             query_embedding = query_embedding.tolist()
-
-        return self.text_collection.query(
-            query_embeddings=[query_embedding],
-            n_results=n_results,
-            where=where
+        return self.client.search(
+            collection_name=self.text_collection,
+            query_vector=query_embedding,
+            limit=n_results,
+            query_filter=query_filter
         )
 
-    def query_images(
-        self,
-        query_embedding,
-        n_results: int = 5,
-        where: Optional[dict] = None
-    ) -> dict:
-        """
-        Query images collection.
-
-        Args:
-            query_embedding: Query embedding (numpy array or list)
-            n_results: Number of results to return
-            where: Optional metadata filter
-
-        Returns:
-            Query results from ChromaDB
-        """
-        if self.image_collection is None:
-            raise ValueError("Image collection not initialized")
-
-        # Convert numpy to list if needed
-        if hasattr(query_embedding, 'tolist'):
+    def query_images(self, query_embedding, n_results: int = 5, query_filter: dict | None = None) -> list:
+        """Query images."""
+        if isinstance(query_embedding, np.ndarray):
             query_embedding = query_embedding.tolist()
-
-        return self.image_collection.query(
-            query_embeddings=[query_embedding],
-            n_results=n_results,
-            where=where
+        return self.client.search(
+            collection_name=self.image_collection,
+            query_vector=query_embedding,
+            limit=n_results,
+            query_filter=query_filter
         )
-
-    def reset_database(self):
-        """Reset the database (delete all collections)."""
-        self.client.reset()
-        self.text_collection = None
-        self.image_collection = None
-        print("Database reset complete")
 
 
 def main():
-    """Test ChromaDB initialization and querying."""
-    # Initialize database
-    db = MultimodalDB(persist_directory="../data/chroma_db")
+    """Test Qdrant initialization and filtering."""
+    db = MultimodalDB(persist_directory="../data/qdrant_db")
 
-    # Initialize collections
     db.initialize_text_collection(
         chunks_path="../data/processed/chunks.json",
         embeddings_path="../data/embeddings/text_embeddings.pkl"
@@ -269,54 +156,47 @@ def main():
         embeddings_path="../data/embeddings/image_embeddings.pkl"
     )
 
-    # Test text query with dummy embedding
-    print("\n=== Test: Text Query ===")
-    dummy_text_emb = np.random.rand(384)  # 384-dim for text
+    dummy_text_emb = np.random.rand(384)
+    dummy_img_emb = np.random.rand(512)
 
+    # Test 1: Basic query
+    print("\n=== Test 1: Basic Text Query ===")
     results = db.query_text(dummy_text_emb, n_results=3)
-    print(f"Found {len(results['ids'][0])} results")
-    for i, (id, doc, meta, dist) in enumerate(zip(
-        results['ids'][0],
-        results['documents'][0],
-        results['metadatas'][0],
-        results['distances'][0]
-    )):
-        print(f"\n{i+1}. ID: {id}")
-        print(f"   Article: {meta['article_title'][:50]}...")
-        print(f"   Text: {doc[:80]}...")
-        print(f"   Distance: {dist:.3f}")
+    for i, r in enumerate(results):
+        print(f"{i+1}. {r.payload['article_title'][:50]}... | Score: {r.score:.3f}")
 
-    # Test metadata filtering
-    print("\n=== Test: Metadata Filtering ===")
-    filtered_results = db.query_text(
+    # Test 2: Multi-category filter
+    print("\n=== Test 2: Multi-Category Filter ===")
+    results = db.query_text(
         dummy_text_emb,
         n_results=3,
-        where={"article_id": 1}
+        query_filter=Filter(must=[FieldCondition(key="article_categories", match=MatchAny(any=["ML Research", "Business"]))])
     )
-    print(f"Found {len(filtered_results['ids'][0])} results for article_id=1")
-    for id, meta in zip(filtered_results['ids'][0], filtered_results['metadatas'][0]):
-        print(f"  - {id} (article {meta['article_id']})")
+    for r in results:
+        print(f"  - {r.payload['article_title'][:50]} | {r.payload['article_categories']}")
 
-    # Test image query
-    print("\n=== Test: Image Query ===")
-    dummy_image_emb = np.random.rand(512)  # 512-dim for images
+    # Test 3: Date range filter (October 2025 timestamps)
+    print("\n=== Test 3: Date Range (October 2025) ===")
+    oct_start = int(datetime(2025, 10, 1).timestamp())
+    nov_start = int(datetime(2025, 11, 1).timestamp())
+    results = db.query_text(
+        dummy_text_emb,
+        n_results=5,
+        query_filter=Filter(must=[FieldCondition(key="article_timestamp", range=Range(gte=oct_start, lt=nov_start))])
+    )
+    for r in results:
+        print(f"  - {r.payload['article_title'][:40]} | {r.payload['article_date'][:10]}")
 
-    img_results = db.query_images(dummy_image_emb, n_results=3)
-    print(f"Found {len(img_results['ids'][0])} image results")
-    for i, (id, doc, meta, dist) in enumerate(zip(
-        img_results['ids'][0],
-        img_results['documents'][0],
-        img_results['metadatas'][0],
-        img_results['distances'][0]
-    )):
-        print(f"\n{i+1}. ID: {id}")
-        print(f"   Image: {meta['image_path']}")
-        print(f"   Article: {meta['article_title'][:50]}...")
-        print(f"   Distance: {dist:.3f}")
+    # Test 4: Image query
+    print("\n=== Test 4: Image Query ===")
+    results = db.query_images(dummy_img_emb, n_results=3)
+    for r in results:
+        print(f"  - {r.payload['image_path']} | {r.payload['article_title'][:40]}")
 
-    print("\n=== Database Statistics ===")
-    print(f"Text chunks: {db.text_collection.count()}")
-    print(f"Images: {db.image_collection.count()}")
+    # Stats
+    print("\n=== Statistics ===")
+    print(f"Text chunks: {db.client.get_collection(db.text_collection).points_count}")
+    print(f"Images: {db.client.get_collection(db.image_collection).points_count}")
 
 
 if __name__ == "__main__":

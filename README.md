@@ -33,7 +33,7 @@ This system enables semantic search over The Batch articles by combining:
   - **Why**: Open-source multimodal model, trained on image-text pairs
 
 #### Vector Database
-- **ChromaDB**: Store and query embeddings with metadata
+- **Qdrant**: Store and query embeddings with metadata filtering
   - **Why**: Local, supports metadata filtering, easy to use, no server needed
 
 #### LLM
@@ -91,7 +91,7 @@ Gradio UI Display
 
 ### Metadata Filtering
 - Stored metadata: `date`, `title`, `article_id`, `url`, `image_path`, `tags`
-- ChromaDB `where` clause for filtering before/after retrieval
+- Qdrant filters for metadata-based filtering (categories, date ranges, article IDs)
 - Examples: "2 latest articles", "articles from 2024", "articles about transformers"
 
 ## Project Structure
@@ -109,7 +109,7 @@ Gradio UI Display
 │   ├── embeddings.py               # [TODO] Text + Image embedding generation
 │   ├── retriever.py                # [TODO] Multimodal retriever (from RAG/)
 │   ├── llm_handler.py              # [TODO] LLM integration (Ollama/HF)
-│   ├── database.py                 # [TODO] Vector DB operations (ChromaDB)
+│   ├── database.py                 # Vector DB operations (Qdrant)
 │   ├── tokenizing.py               # [TODO] Tokenization (from RAG/)
 │   └── prompt.py                   # [TODO] Prompt templates (from RAG/)
 ├── app.py                          # [TODO] Gradio UI application (from RAG/)
@@ -268,6 +268,35 @@ data/images/
 
 **Current Dataset**: 18 articles across all 9 categories with proper dates and metadata.
 
+#### Database Rebuild (In Progress)
+
+After Phase 6.5 optimizations, the database needs to be rebuilt with the new data structure:
+
+**What's Changed**:
+- 245 new chunks (up from old dataset) with article titles prepended
+- Enhanced metadata: dates (JSON-LD extracted), multi-category tags
+- CLIP-matched images (78 images assigned to chunks at threshold 0.5)
+- All 154 images available for embedding (not just the 78 assigned ones)
+
+**Rebuild Steps (Phases 3-5)**:
+1. **Phase 3**: Regenerate text embeddings and BM25 index from 245 chunks with titles
+2. **Phase 4**: Regenerate image embeddings for all 154 images (CLIP ViT-B/32)
+3. **Phase 5**: Rebuild Qdrant with updated chunks, embeddings, and metadata
+
+**Commands**:
+```bash
+# Phase 3: Text embeddings & BM25
+cd src
+source ../env/bin/activate
+python embeddings.py
+
+# Phase 4: Image embeddings
+python image_embeddings.py
+
+# Phase 5: Qdrant
+python database.py
+```
+
 #### Remaining Limitations
 
 **Content-based update detection**: No mechanism to detect when already-scraped articles have been edited (only detects new articles by URL).
@@ -300,7 +329,7 @@ data/images/
   - [x] Generated image embeddings
   - [x] Tested image retrieval (10 images, 512-dim embeddings, text-to-image working)
 - [x] Phase 5: Multimodal Vector Database
-  - [x] Documented ChromaDB approach
+  - [x] Documented Qdrant approach
   - [x] Implemented database module
   - [x] Loaded text and image embeddings
   - [x] Tested metadata filtering (71 text chunks, 10 images stored)
@@ -310,11 +339,14 @@ data/images/
   - [x] Image retrieval implementation
   - [x] Multimodal fusion implementation
   - [x] Tested end-to-end retrieval (hybrid scores, metadata filtering working)
-- [ ] Phase 6.5: System Optimizations
-  - [ ] Enhanced metadata extraction (date, author from HTML)
-  - [ ] CLIP-based semantic image-chunk assignment
-  - [ ] Incremental scraping with deduplication
-  - [ ] Database rebuild with optimizations
+- [x] Phase 6.5: System Optimizations
+  - [x] Enhanced metadata extraction (date from JSON-LD, multi-category support)
+  - [x] CLIP-based semantic image-chunk assignment (threshold 0.5)
+  - [x] Incremental scraping with deduplication
+  - [x] Multi-category scraping (9 categories)
+  - [x] Article titles in chunks for better search
+  - [x] CLI interfaces for scraper and chunker
+  - [ ] Database rebuild with new chunks and embeddings
 
 ### Phase 3: Text Embeddings & BM25
 
@@ -380,54 +412,67 @@ data/images/
 ### Phase 5: Multimodal Vector Database
 
 #### Approach
-**Unified Storage with ChromaDB**: Store text and image embeddings with rich metadata for efficient retrieval and filtering.
+**Unified Storage with Qdrant**: Store text and image embeddings with advanced metadata filtering.
 
-**Why ChromaDB?**
-- **Local/Free**: Runs locally, no API costs, persistent storage
-- **Metadata filtering**: Native support for `where` clause filtering
+**Why Qdrant?**
+- **Local/Fast**: Rust-powered, runs locally with no API costs
+- **Advanced filtering**: Native support for arrays, date ranges, complex queries
 - **Multi-collection**: Separate collections for text chunks and images
-- **Vector similarity**: Built-in cosine similarity search
-- **Easy integration**: Simple Python API
+- **Vector similarity**: Cosine distance search
+- **Production-ready**: High performance, scales to millions of vectors
 
 **Database Structure**
 Two separate collections:
 1. **`text_chunks`**: Text embeddings with metadata
-   - Embeddings: 384-dim (sentence-transformers)
-   - Metadata: `article_id`, `article_title`, `article_url`, `chunk_id`, `chunk_index`, `word_count`
-   - Documents: Full chunk text for context
+   - Embeddings: 384-dim (sentence-transformers), cosine distance
+   - Metadata: `article_id`, `article_title`, `article_url`, `article_date`, `article_timestamp`, `article_categories` (array), `chunk_id`, `chunk_index`, `word_count`
+   - Payload: Full chunk text for context
 
 2. **`images`**: Image embeddings with metadata
-   - Embeddings: 512-dim (CLIP)
-   - Metadata: `article_id`, `article_title`, `image_path`, `chunk_id`
-   - Documents: Image file paths
+   - Embeddings: 512-dim (CLIP), cosine distance
+   - Metadata: `article_id`, `article_title`, `image_path`, `full_path`
+   - Payload: Image file paths
 
 **Metadata Filtering Examples**
 ```python
-# Get chunks from specific article
-results = collection.query(
-    query_embeddings=query_emb,
-    where={"article_id": 1},
-    n_results=5
+from qdrant_client.models import Filter, FieldCondition, MatchAny, Range
+
+# Filter by multiple categories
+results = client.search(
+    collection_name="text_chunks",
+    query_vector=query_emb,
+    query_filter=Filter(must=[
+        FieldCondition(key="article_categories", match=MatchAny(any=["ML Research", "Business"]))
+    ]),
+    limit=5
 )
 
-# Get recent articles (would need date field)
-results = collection.query(
-    query_embeddings=query_emb,
-    where={"date": {"$gte": "2024-01-01"}},
-    n_results=5
+# Filter by date range (October 2025)
+results = client.search(
+    collection_name="text_chunks",
+    query_vector=query_emb,
+    query_filter=Filter(must=[
+        FieldCondition(key="article_timestamp", range=Range(gte=1727740800, lt=1730419200))
+    ]),
+    limit=5
+)
+
+# Filter by article ID
+results = client.search(
+    collection_name="text_chunks",
+    query_vector=query_emb,
+    query_filter=Filter(must=[
+        FieldCondition(key="article_id", match=MatchAny(any=[0, 1]))
+    ]),
+    limit=5
 )
 ```
 
-**Why Separate Collections?**
-- Different embedding dimensions (384 vs 512)
-- Different metadata schemas
-- Independent querying (text-only vs image-only)
-- Later fusion happens in retriever.py
-
-**Persistent Storage**
-- ChromaDB stores data in `data/chroma_db/` directory
-- Embeddings loaded once from pickle files during initialization
-- No re-embedding needed on reload
+**Key Features**:
+- **Array support**: Categories stored as arrays, filter by multiple categories
+- **Date ranges**: Unix timestamps enable proper date range queries
+- **Persistent storage**: Data stored in `data/qdrant_db/` directory
+- **Separate collections**: Different dimensions (384 vs 512), independent querying
 
 ### Phase 6: Multimodal Retrieval System
 

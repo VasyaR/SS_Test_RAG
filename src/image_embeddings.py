@@ -152,7 +152,7 @@ class CLIPImageEmbedder:
         metadata_output: str
     ) -> tuple[np.ndarray, list[dict]]:
         """
-        Process all images from chunks and generate embeddings.
+        Process all images from images directory and generate embeddings.
 
         Args:
             chunks_path: Path to chunks JSON
@@ -163,29 +163,38 @@ class CLIPImageEmbedder:
         Returns:
             Tuple of (embeddings array, metadata list)
         """
-        # Load chunks
+        # Load chunks to map images to articles
         with open(chunks_path, 'r', encoding='utf-8') as f:
             chunks = json.load(f)
 
-        # Collect all unique images with metadata
-        image_metadata = []
-        seen_images = set()
-
+        # Build article mapping from chunks
+        article_map = {}
         for chunk in chunks:
-            for img_path in chunk.get('associated_images', []):
-                if img_path not in seen_images:
-                    full_path = Path(images_dir) / img_path
-                    if full_path.exists():
-                        image_metadata.append({
-                            'image_path': img_path,
-                            'full_path': str(full_path),
-                            'article_id': chunk['article_id'],
-                            'article_title': chunk['article_title'],
-                            'chunk_id': chunk['chunk_id']
-                        })
-                        seen_images.add(img_path)
+            if chunk['article_id'] not in article_map:
+                article_map[chunk['article_id']] = chunk['article_title']
 
-        print(f"Found {len(image_metadata)} unique images")
+        # Process ALL images in directory
+        images_path = Path(images_dir)
+        all_images = sorted(images_path.glob('article_*_img_*'))
+
+        image_metadata = []
+        for img_path in all_images:
+            # Extract article_id from filename (e.g., article_5_img_2.jpg -> 5)
+            filename = img_path.name
+            try:
+                article_id = int(filename.split('_')[1])
+                article_title = article_map.get(article_id, 'Unknown')
+
+                image_metadata.append({
+                    'image_path': filename,
+                    'full_path': str(img_path),
+                    'article_id': article_id,
+                    'article_title': article_title
+                })
+            except (IndexError, ValueError):
+                continue
+
+        print(f"Found {len(image_metadata)} images in directory")
 
         # Generate embeddings
         image_paths = [meta['full_path'] for meta in image_metadata]
