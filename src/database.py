@@ -109,6 +109,10 @@ class MultimodalDB:
                 payload={
                     'article_id': meta['article_id'],
                     'article_title': meta['article_title'],
+                    'article_url': meta.get('article_url', ''),
+                    'article_date': meta.get('article_date', ''),
+                    'article_timestamp': meta.get('article_timestamp'),
+                    'article_categories': meta.get('article_categories', []),
                     'image_path': meta['image_path'],
                     'full_path': meta['full_path']
                 }

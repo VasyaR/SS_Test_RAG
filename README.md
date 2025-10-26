@@ -37,10 +37,11 @@ This system enables semantic search over The Batch articles by combining:
   - **Why**: Local, supports metadata filtering, easy to use, no server needed
 
 #### LLM
-- **Ollama** (Llama 3.2 or Mistral): Local language model
-  - **Why**: Free, runs locally, no API costs, good quality
-- **Alternative**: HuggingFace Transformers
-  - **Why**: Fallback if Ollama not available
+- **Groq API** (Llama 3.3 70B Versatile): Cloud-based LLM via free API
+  - **Why**: Production-ready, faster than local (500+ tokens/sec), free tier (14,400 requests/day), same as RAG/ architecture
+  - **Library**: litellm for unified API access
+  - **Model**: `groq/llama-3.3-70b-versatile`
+  - **Alternative**: Can switch to other providers (OpenAI, Anthropic) via litellm without code changes
 
 #### Chunking
 - **LangChain TextSplitter** or custom paragraph-based splitter
@@ -158,7 +159,34 @@ ollama pull llama3.2
 
 ### Usage
 
-[TODO: Add usage instructions after implementation]
+#### Running the Gradio App
+
+1. **Activate environment**:
+```bash
+source env/bin/activate
+```
+
+2. **Launch the app**:
+```bash
+python3 -u app.py
+```
+
+3. **Access the UI**:
+   - Local: http://127.0.0.1:7860
+   - Public (share link): Displayed in terminal output
+
+4. **Setup tab** (first time):
+   - Enter your Groq API key (get free key at https://console.groq.com/keys)
+   - Click "Submit" to initialize the bot
+
+5. **Article QA tab**:
+   - Enter your question
+   - (Optional) Select categories to filter
+   - (Optional) Set date range (format: YYYY-MM-DD)
+   - Adjust number of results (1-10)
+   - Toggle hybrid search (BM25 + Semantic)
+   - Click "Ask Question"
+   - View answer, sources, and related image
 
 ## Implementation Details
 
@@ -351,6 +379,16 @@ python database.py
   - [x] Categories stored as arrays for multi-category filtering
   - [x] Rebuilt database with 245 chunks and 154 images
   - [x] All advanced filtering tested and working
+- [x] Phase 7: LLM Integration
+  - [x] Created prompt template for article Q&A assistant
+  - [x] Implemented ArticleQABot with Groq API (Llama 3.3 70B)
+  - [x] Built Gradio UI with Setup + Article QA tabs
+  - [x] Added metadata filtering UI (categories, date ranges)
+  - [x] Implemented smart image retrieval (best from top article + general CLIP)
+  - [x] Fixed image metadata (added categories/dates/timestamps)
+  - [x] Rebuilt Qdrant with enriched image metadata
+  - [x] Fixed Gradio Gallery bug (pydantic 2.10.6)
+  - [x] End-to-end tested and working
 
 ### Phase 3: Text Embeddings & BM25
 
@@ -537,6 +575,119 @@ results = client.search(
     ]
 }
 ```
+
+### Phase 7: LLM Integration ✅ COMPLETED
+
+#### Approach
+**Question-Answering System**: Use Groq API with Llama 3.3 70B to generate natural language answers from retrieved article context.
+
+**LLM Architecture** (following RAG/ pattern)
+1. **ArticleQABot Class** (`src/LLM_usage.py`):
+   - Initialize with MultimodalRetriever
+   - System prompt for article Q&A assistant
+   - Answer generation with retrieved context
+
+2. **Prompt Template** (`src/prompt.py`):
+   - System role: "You are a helpful AI news assistant..."
+   - Instructions: Answer from retrieved articles, cite sources, admit when uncertain
+   - Format: Concise answers with article references
+
+3. **Context Building**:
+   - Retrieve top K chunks (default: 5)
+   - Format: `[Article Title] (Date)\nContent...\n---`
+   - Include article URLs for citations
+   - Limit context to ~2000 tokens to fit LLM window
+
+**API Configuration**
+- **Library**: litellm (unified API for multiple providers)
+- **Model**: `groq/llama-3.3-70b-versatile`
+- **API Key**: User-provided via Gradio UI (Setup tab)
+- **Rate Limits**: 14,400 requests/day (free tier)
+- **Fallback**: Can switch to other models via litellm config
+
+**Smart Image Retrieval Strategy**
+1. **First image**: Best CLIP similarity from best text-matched article
+2. **Remaining images**: General CLIP search (avoid duplicates)
+3. **Total**: Up to 3 images per query
+4. **Filters**: Respects category/date filters on both text and images
+
+**Response Format**
+```python
+{
+    "answer": "Generated answer text...",
+    "context": "Retrieved article chunks...",
+    "sources": [
+        {"title": "...", "url": "...", "date": "...", "categories": [...]}
+    ],
+    "images": [
+        {"image_path": "...", "article_id": ..., "metadata": {...}}
+    ]
+}
+```
+
+**Metadata Filtering Integration**
+- UI provides category/date filters → build_filter()
+- Filter passed to retriever → filtered results → LLM context
+- Example: "What's new in transformers?" + category="ML Research" + date_range="Oct 2025"
+
+**Gradio UI** (`app.py`)
+- **Tab 1 (Setup)**: Enter Groq API key (get one at https://console.groq.com/keys)
+- **Tab 2 (Article QA)**:
+  - Query input with optional filters (categories, date range, result count)
+  - Hybrid search toggle (BM25 + Semantic)
+  - Answer display with sources and related images gallery
+
+**Bug Fixes**
+- ✅ Fixed Gradio 5.9.1 Gallery component error by pinning pydantic==2.10.6
+- ✅ Added full metadata (categories, dates, timestamps) to image collection for filtering
+
+## Limitations & Known Issues
+
+### Qdrant Local Mode (Embedded)
+**Current Setup**: Uses Qdrant in local/embedded mode (`QdrantClient(path=...)`), which provides file-based persistence without requiring a server.
+
+**Limitation - No Concurrent Access**:
+- ✗ **Cannot scrape new articles while app is running** - Qdrant local mode uses file locking and only allows one client at a time
+- ✗ **Must stop app to update database** - To add new scraped articles, you must stop the Gradio app, regenerate embeddings, rebuild Qdrant collections, then restart the app
+
+**Workflow for Adding New Articles**:
+1. Stop the running Gradio app (kill the process)
+2. Scrape new articles: `python3 src/scraper.py --multi-category --per-category 1`
+3. Process chunks: `python3 src/chunking.py`
+4. Regenerate embeddings: `python3 src/embeddings.py` and `python3 src/image_embeddings.py`
+5. Rebuild Qdrant: `python3 src/database.py`
+6. Restart the app: `python3 -u app.py`
+
+**Production Solution**:
+For a system that needs continuous scraping while serving queries, switch to **Qdrant Server Mode**:
+```bash
+# Run Qdrant as a separate server (supports concurrent access)
+docker run -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant
+
+# Update code to use server mode
+client = QdrantClient(host="localhost", port=6333)  # instead of path=...
+```
+
+### Image-Chunk Association (Deprecated)
+**Historical Feature**: Phase 2 implemented CLIP-based semantic matching to link specific images to text chunks (`associated_images` field in chunks).
+
+**Current Status**: **This feature is no longer used in retrieval** (deprecated as of Phase 7).
+
+**Why Deprecated?**:
+- **Simpler approach**: Smart image retrieval (best from top article + general CLIP) proved more effective
+- **Better coverage**: Not restricted to pre-linked images, can surface any relevant image
+- **Less complexity**: Removed dependency on chunk-image assignments
+
+**What Remains**:
+- `associated_images` field still exists in `chunks.json` for historical/debugging purposes
+- Data in the field is accurate (CLIP similarity threshold 0.5) but not actively used
+
+**Future**: The field may be removed entirely in a database cleanup phase.
+
+### Content Update Detection
+**Limitation**: The scraper only detects new articles by URL. If an existing article is edited on The Batch website, the scraper will not detect or update the changes.
+
+**Workaround**: Manually delete the article from `data/raw/articles_test_batch.json` and re-scrape to get the updated version.
 
 ## Evaluation
 

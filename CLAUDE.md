@@ -16,6 +16,7 @@ Folder for creation test task.
 7. Finally, add a review section to the todo.md file with a summary of the changes you made and any other relevant information.
 8. Always enter the env before launching somethig. If downloading or removing packages, make changes in requirements.txt
 9. Working pipeline is: documenting solution/change in README.md(or specified for the solution info file) -> implement -> test(create test file if there are no way to test without it, most of the times test file cration is overkill) -> git commit and push
+10. Always use relative paths, not absolute
 
 ## Coding Conventions MUST FOLLOW!!!
 

@@ -149,7 +149,8 @@ class CLIPImageEmbedder:
         chunks_path: str,
         images_dir: str,
         embeddings_output: str,
-        metadata_output: str
+        metadata_output: str,
+        articles_path: str = "../data/raw/articles_test_batch.json"
     ) -> tuple[np.ndarray, list[dict]]:
         """
         Process all images from images directory and generate embeddings.
@@ -159,19 +160,37 @@ class CLIPImageEmbedder:
             images_dir: Directory containing images
             embeddings_output: Path to save embeddings
             metadata_output: Path to save metadata
+            articles_path: Path to original articles JSON with full metadata
 
         Returns:
             Tuple of (embeddings array, metadata list)
         """
-        # Load chunks to map images to articles
-        with open(chunks_path, 'r', encoding='utf-8') as f:
-            chunks = json.load(f)
+        # Load original articles for full metadata (categories, dates)
+        with open(articles_path, 'r', encoding='utf-8') as f:
+            articles = json.load(f)
 
-        # Build article mapping from chunks
+        # Build article mapping from original articles
+        from datetime import datetime
         article_map = {}
-        for chunk in chunks:
-            if chunk['article_id'] not in article_map:
-                article_map[chunk['article_id']] = chunk['article_title']
+        for article in articles:
+            article_id = article['article_id']
+            # Parse date to timestamp
+            date_str = article.get('date', '')
+            timestamp = None
+            if date_str:
+                try:
+                    dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                    timestamp = int(dt.timestamp())
+                except:
+                    pass
+
+            article_map[article_id] = {
+                'title': article.get('title', ''),
+                'url': article.get('url', ''),
+                'date': date_str,
+                'timestamp': timestamp,
+                'categories': article.get('categories', [])
+            }
 
         # Process ALL images in directory
         images_path = Path(images_dir)
@@ -183,13 +202,17 @@ class CLIPImageEmbedder:
             filename = img_path.name
             try:
                 article_id = int(filename.split('_')[1])
-                article_title = article_map.get(article_id, 'Unknown')
+                article_info = article_map.get(article_id, {})
 
                 image_metadata.append({
                     'image_path': filename,
                     'full_path': str(img_path),
                     'article_id': article_id,
-                    'article_title': article_title
+                    'article_title': article_info.get('title', 'Unknown'),
+                    'article_url': article_info.get('url', ''),
+                    'article_date': article_info.get('date', ''),
+                    'article_timestamp': article_info.get('timestamp'),
+                    'article_categories': article_info.get('categories', [])
                 })
             except (IndexError, ValueError):
                 continue

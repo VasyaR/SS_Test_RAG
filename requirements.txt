@@ -19,8 +19,8 @@ regex==2024.5.15  # Required for CLIP
 qdrant-client==1.12.1
 
 # LLM Integration
-ollama==0.4.5  # Python SDK for Ollama
-# Alternative: accelerate==0.34.2  # For HuggingFace models
+litellm==1.55.8  # Unified API for LLM providers (Groq, OpenAI, etc.)
+pydantic==2.10.6  # Fix for Gradio Gallery json_schema bug (GitHub issue #11084)
 
 # Text Splitting
 langchain-text-splitters==0.3.2
