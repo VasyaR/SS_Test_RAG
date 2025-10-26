@@ -346,7 +346,11 @@ python database.py
   - [x] Multi-category scraping (9 categories)
   - [x] Article titles in chunks for better search
   - [x] CLI interfaces for scraper and chunker
-  - [ ] Database rebuild with new chunks and embeddings
+  - [x] Migrated from ChromaDB to Qdrant
+  - [x] Added Unix timestamp support for date range filtering
+  - [x] Categories stored as arrays for multi-category filtering
+  - [x] Rebuilt database with 245 chunks and 154 images
+  - [x] All advanced filtering tested and working
 
 ### Phase 3: Text Embeddings & BM25
 

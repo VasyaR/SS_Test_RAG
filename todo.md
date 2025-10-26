@@ -15,61 +15,73 @@ Building a Multimodal RAG system for The Batch articles with text + image retrie
 ## Todo List
 
 ### Phase 0: Setup & Planning
-- [ ] Create initial README.md with project overview
-- [ ] Set up project structure (folders)
-- [ ] Create requirements.txt with dependencies
-- [ ] Document technology stack choices in README
+- [x] Create initial README.md with project overview
+- [x] Set up project structure (folders)
+- [x] Create requirements.txt with dependencies
+- [x] Document technology stack choices in README
 
 ### Phase 1: Data Ingestion (The Batch Scraper)
-- [ ] **Document**: Web scraping approach in README (BeautifulSoup, structure, pagination)
-- [ ] Implement web scraper for The Batch articles
-- [ ] Extract: title, date, text content, images URLs, article URL
-- [ ] Download and save images locally
-- [ ] Save raw articles as JSON
-- [ ] **Test**: Scrape 10-20 articles, verify data quality
-- [ ] **Update** project structure in README
+- [x] **Document**: Web scraping approach in README (BeautifulSoup, structure, pagination)
+- [x] Implement web scraper for The Batch articles
+- [x] Extract: title, date, text content, images URLs, article URL, categories
+- [x] Download and save images locally (RGBA→PNG conversion)
+- [x] Save raw articles as JSON
+- [x] **Test**: Scraped 18 articles across 9 categories
+- [x] **Update** project structure in README
 
 ### Phase 2: Text Processing & Chunking
-- [ ] **Document**: Chunking strategy in README (paragraph-based, 200-500 tokens, why)
-- [ ] Implement text chunking logic (reuse tokenizing.py pattern)
-- [ ] Link chunks to their parent articles
-- [ ] Link chunks to associated images (based on proximity in HTML)
-- [ ] **Test**: Chunk sample articles, verify quality
-- [ ] **Update** project structure in README
+- [x] **Document**: Chunking strategy in README (paragraph-based, 500 chars)
+- [x] Implement text chunking logic (langchain RecursiveCharacterTextSplitter)
+- [x] Link chunks to their parent articles
+- [x] Link chunks to associated images via CLIP semantic matching
+- [x] Prepend article title to chunks for better search
+- [x] **Test**: 245 chunks created with metadata
+- [x] **Update** project structure in README
 
 ### Phase 3: Text Embeddings & BM25
-- [ ] **Document**: Text retrieval approach (BM25 + sentence-transformers, hybrid search)
-- [ ] Set up sentence-transformers (all-MiniLM-L6-v2 or all-distilroberta-v1)
-- [ ] Generate embeddings for text chunks (reuse retriever.py pattern)
-- [ ] Set up BM25 index (reuse from RAG/)
-- [ ] **Test**: Query "AI trends" and verify text retrieval works
-- [ ] **Update** project structure in README
+- [x] **Document**: Text retrieval approach (BM25 + sentence-transformers, hybrid search)
+- [x] Set up sentence-transformers (all-MiniLM-L6-v2)
+- [x] Generate embeddings for text chunks (384-dim, normalized)
+- [x] Set up BM25 index with NLTK tokenization
+- [x] **Test**: Text retrieval working with hybrid search
+- [x] **Update** project structure in README
 
 ### Phase 4: Image Embeddings (CLIP)
-- [ ] **Document**: Image embedding approach (CLIP model, why multimodal)
-- [ ] Set up CLIP model (transformers library)
-- [ ] Generate embeddings for all images
-- [ ] Save embeddings efficiently (split if needed, like RAG/)
-- [ ] **Test**: Query with text, retrieve similar images
-- [ ] **Update** project structure in README
+- [x] **Document**: Image embedding approach (CLIP ViT-B/32)
+- [x] Set up CLIP model (openai/clip-vit-base-patch32)
+- [x] Generate embeddings for ALL 154 images (512-dim)
+- [x] Save embeddings as pickle files
+- [x] **Test**: Text-to-image and image-to-image retrieval working
+- [x] **Update** project structure in README
 
 ### Phase 5: Multimodal Vector Database
-- [ ] **Document**: Database choice (ChromaDB vs FAISS, metadata filtering)
-- [ ] Set up ChromaDB/FAISS for text chunks
-- [ ] Store metadata (date, title, article_id, image_path, tags)
-- [ ] Add image embeddings to separate collection or same
-- [ ] Implement metadata filtering (date, article count)
-- [ ] **Test**: Query with filters ("2 latest articles about AI")
-- [ ] **Update** project structure in README
+- [x] **Document**: Qdrant database approach (replaced ChromaDB)
+- [x] Set up Qdrant with separate collections for text and images
+- [x] Store metadata: article_id, title, url, date, timestamp, categories (array)
+- [x] Implement advanced filtering: multi-category, date ranges
+- [x] **Test**: All filtering working (categories, dates, article IDs)
+- [x] **Update** project structure in README
 
 ### Phase 6: Multimodal Retrieval System
-- [ ] **Document**: Fusion strategy (text + image scores, weighting, ranking)
-- [ ] Implement multimodal retriever (modify retriever.py)
-- [ ] Combine text scores + image scores (weighted fusion)
-- [ ] Add metadata filtering integration
-- [ ] Return: top K chunks + images + article metadata
-- [ ] **Test**: Various queries (text-only, multimodal, with filters)
-- [ ] **Update** project structure in README
+- [x] **Document**: Fusion strategy (text + image scores, weighting, ranking)
+- [x] Implement multimodal retriever
+- [x] Combine text scores + image scores (weighted fusion)
+- [x] Add metadata filtering integration
+- [x] Return: top K chunks + images + article metadata
+- [x] **Test**: End-to-end retrieval tested
+- [x] **Update** project structure in README
+
+### Phase 6.5: System Optimizations
+- [x] Enhanced metadata extraction (JSON-LD dates, multi-category support)
+- [x] CLIP-based semantic image-chunk assignment (threshold 0.5)
+- [x] Incremental scraping with deduplication
+- [x] Multi-category scraping (9 categories: Weekly Issues, ML Research, etc.)
+- [x] Article titles in chunks for better BM25/semantic search
+- [x] CLI interfaces for scraper and chunker
+- [x] Migrated from ChromaDB to Qdrant
+- [x] Unix timestamps for date range filtering
+- [x] Categories as arrays for multi-category filtering
+- [x] Database rebuilt: 245 chunks, 154 images
 
 ### Phase 7: LLM Integration (Free/Local)
 - [ ] **Document**: LLM choice (Ollama vs HuggingFace, model selection)
@@ -119,13 +131,13 @@ Building a Multimodal RAG system for The Batch articles with text + image retrie
 
 ### Core Components
 - **Web Scraping**: BeautifulSoup4 + requests
-- **Text Embeddings**: sentence-transformers (all-MiniLM-L6-v2)
-- **Image Embeddings**: CLIP (openai/clip-vit-base-patch32)
-- **Vector Database**: ChromaDB (local, with metadata filtering)
-- **BM25**: rank_bm25
-- **LLM**: Ollama (Llama 3.2) or HuggingFace Transformers
-- **UI**: Gradio
-- **Chunking**: langchain TextSplitter or custom
+- **Text Embeddings**: sentence-transformers (all-MiniLM-L6-v2, 384-dim)
+- **Image Embeddings**: CLIP (openai/clip-vit-base-patch32, 512-dim)
+- **Vector Database**: Qdrant (local, advanced filtering with arrays & date ranges)
+- **BM25**: rank_bm25 with NLTK tokenization
+- **LLM**: Ollama (Llama 3.2) or HuggingFace Transformers (pending)
+- **UI**: Gradio (pending)
+- **Chunking**: langchain RecursiveCharacterTextSplitter (500 chars, 50 overlap)
 
 ### File Reuse from RAG/
 - ✅ `retriever.py` - 70% reusable (BM25 + semantic logic)
