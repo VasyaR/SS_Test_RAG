@@ -20,7 +20,7 @@ Folder for creation test task.
 - Compact code without redundant hundreds lines of code is great. No files bigger than 1000 rows.
 - Always use relative paths
 - All the functions, classes and similar code structures should have a Google format docstrings
-- Imports must be organized as in the best python code practices
+- Imports must be organized as in the best python code practices and must be located at the top of the file
 - Strict following of SOLID principles and DRY principle.
 - Instead of using from Typing import Dict, List... use python built-in typification
 - Where possible, the logic should be broke into files, so there are no enourmously large files that have different logic

@@ -286,6 +286,11 @@ data/images/
   - [x] CLIP implementation
   - [x] Generated image embeddings
   - [x] Tested image retrieval (10 images, 512-dim embeddings, text-to-image working)
+- [x] Phase 5: Multimodal Vector Database
+  - [x] Documented ChromaDB approach
+  - [x] Implemented database module
+  - [x] Loaded text and image embeddings
+  - [x] Tested metadata filtering (71 text chunks, 10 images stored)
 
 ### Phase 3: Text Embeddings & BM25
 
@@ -347,6 +352,58 @@ data/images/
 - Image embeddings saved to `data/embeddings/image_embeddings.pkl`
 - Image metadata (paths, article_ids) saved to `data/embeddings/image_metadata.json`
 - Reuse on reload (only embed new images)
+
+### Phase 5: Multimodal Vector Database
+
+#### Approach
+**Unified Storage with ChromaDB**: Store text and image embeddings with rich metadata for efficient retrieval and filtering.
+
+**Why ChromaDB?**
+- **Local/Free**: Runs locally, no API costs, persistent storage
+- **Metadata filtering**: Native support for `where` clause filtering
+- **Multi-collection**: Separate collections for text chunks and images
+- **Vector similarity**: Built-in cosine similarity search
+- **Easy integration**: Simple Python API
+
+**Database Structure**
+Two separate collections:
+1. **`text_chunks`**: Text embeddings with metadata
+   - Embeddings: 384-dim (sentence-transformers)
+   - Metadata: `article_id`, `article_title`, `article_url`, `chunk_id`, `chunk_index`, `word_count`
+   - Documents: Full chunk text for context
+
+2. **`images`**: Image embeddings with metadata
+   - Embeddings: 512-dim (CLIP)
+   - Metadata: `article_id`, `article_title`, `image_path`, `chunk_id`
+   - Documents: Image file paths
+
+**Metadata Filtering Examples**
+```python
+# Get chunks from specific article
+results = collection.query(
+    query_embeddings=query_emb,
+    where={"article_id": 1},
+    n_results=5
+)
+
+# Get recent articles (would need date field)
+results = collection.query(
+    query_embeddings=query_emb,
+    where={"date": {"$gte": "2024-01-01"}},
+    n_results=5
+)
+```
+
+**Why Separate Collections?**
+- Different embedding dimensions (384 vs 512)
+- Different metadata schemas
+- Independent querying (text-only vs image-only)
+- Later fusion happens in retriever.py
+
+**Persistent Storage**
+- ChromaDB stores data in `data/chroma_db/` directory
+- Embeddings loaded once from pickle files during initialization
+- No re-embedding needed on reload
 
 ## Evaluation
 
