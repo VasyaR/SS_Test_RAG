@@ -83,25 +83,32 @@ Building a Multimodal RAG system for The Batch articles with text + image retrie
 - [x] Categories as arrays for multi-category filtering
 - [x] Database rebuilt: 245 chunks, 154 images
 
-### Phase 7: LLM Integration (Free/Local)
-- [ ] **Document**: LLM choice (Ollama vs HuggingFace, model selection)
-- [ ] Set up Ollama (Llama 3.2 or Mistral) OR HuggingFace model
-- [ ] Create prompt template for article Q&A (modify prompt.py)
-- [ ] Implement answer generation with retrieved context
-- [ ] Handle context window limits
-- [ ] **Test**: Ask questions, verify answer quality
-- [ ] **Update** project structure in README
+### Phase 7: LLM Integration ✅ COMPLETED
+- [x] **Document**: LLM choice (Groq API chosen over Ollama for speed/free tier)
+- [x] Set up Groq API with Llama 3.3 70B via litellm
+- [x] Create prompt template for article Q&A (src/prompt.py)
+- [x] Implement ArticleQABot with retrieved context (src/LLM_usage.py)
+- [x] Handle context window (~2000 tokens from top K chunks)
+- [x] **Test**: Ask questions, verify answer quality - working!
+- [x] **Update** project structure in README
 
-### Phase 8: Gradio UI
-- [ ] **Document**: UI design (input, outputs, features)
-- [ ] Set up Gradio interface (reuse app.py structure)
-- [ ] Input: Query textbox
-- [ ] Output 1: LLM-generated answer
-- [ ] Output 2: Retrieved article cards (title, date, excerpt, link)
-- [ ] Output 3: Image gallery for retrieved images
-- [ ] Add retrieval mode selector (BM25/Semantic/Combined)
-- [ ] **Test**: Full user flow - query → answer + images + articles
-- [ ] **Update** project structure in README
+#### Phase 7 Enhancements
+- [x] Smart image retrieval: Best CLIP from top article + general search
+- [x] Fixed image metadata: Added categories, dates, timestamps
+- [x] Rebuilt Qdrant database with enriched image metadata
+- [x] Fixed Gradio 5.9.1 Gallery bug (pinned pydantic==2.10.6)
+
+### Phase 8: Gradio UI ✅ COMPLETED
+- [x] **Document**: UI design (Setup + Article QA tabs)
+- [x] Set up Gradio interface (app.py with 2 tabs)
+- [x] Input: Query textbox with optional filters (categories, date range)
+- [x] Output 1: LLM-generated answer
+- [x] Output 2: Retrieved article sources (title, date, URL, categories)
+- [x] Output 3: Image gallery for retrieved images (up to 3)
+- [x] Add retrieval mode selector (Hybrid BM25+Semantic toggle)
+- [x] Add metadata filtering UI (categories checkboxes, date range inputs)
+- [x] **Test**: Full user flow - query → answer + images + articles - WORKING!
+- [x] **Update** project structure in README
 
 ### Phase 9: System Evaluation
 - [ ] **Document**: Evaluation metrics and approach
@@ -127,24 +134,29 @@ Building a Multimodal RAG system for The Batch articles with text + image retrie
 
 ---
 
-## Technology Stack (Free/Local)
+## Technology Stack (Final Implementation)
 
 ### Core Components
 - **Web Scraping**: BeautifulSoup4 + requests
 - **Text Embeddings**: sentence-transformers (all-MiniLM-L6-v2, 384-dim)
 - **Image Embeddings**: CLIP (openai/clip-vit-base-patch32, 512-dim)
-- **Vector Database**: Qdrant (local, advanced filtering with arrays & date ranges)
+- **Vector Database**: Qdrant (local mode, advanced filtering with arrays & date ranges)
 - **BM25**: rank_bm25 with NLTK tokenization
-- **LLM**: Ollama (Llama 3.2) or HuggingFace Transformers (pending)
-- **UI**: Gradio (pending)
+- **LLM**: Groq API (Llama 3.3 70B Versatile) via litellm ✅
+- **UI**: Gradio 5.9.1 ✅
 - **Chunking**: langchain RecursiveCharacterTextSplitter (500 chars, 50 overlap)
 
+**Why Groq over Ollama?**
+- Free tier: 14,400 requests/day
+- Faster inference: 500+ tokens/sec (vs local LLM ~10-50 tok/s)
+- No local GPU/RAM requirements
+- Production-ready quality (Llama 3.3 70B)
+
 ### File Reuse from RAG/
-- ✅ `retriever.py` - 70% reusable (BM25 + semantic logic)
-- ✅ `tokenizing.py` - 90% reusable
-- ✅ `app.py` - 60% reusable (Gradio structure)
-- 🔄 `LLM_usage.py` - 40% reusable (replace Groq with Ollama)
-- 🔄 `prompt.py` - 20% reusable (change prompt content)
+- ✅ `retriever.py` - 70% reused (BM25 + semantic logic, adapted for Qdrant)
+- ✅ `app.py` - 60% reused (Gradio structure, modified for multimodal)
+- ✅ `LLM_usage.py` - 40% reused (Groq integration via litellm)
+- ✅ `prompt.py` - 20% reused (changed prompt content for article Q&A)
 
 ---
 
