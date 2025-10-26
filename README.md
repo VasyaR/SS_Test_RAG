@@ -291,6 +291,12 @@ data/images/
   - [x] Implemented database module
   - [x] Loaded text and image embeddings
   - [x] Tested metadata filtering (71 text chunks, 10 images stored)
+- [x] Phase 6: Multimodal Retrieval System
+  - [x] Documented retrieval strategy
+  - [x] Hybrid text retrieval implementation
+  - [x] Image retrieval implementation
+  - [x] Multimodal fusion implementation
+  - [x] Tested end-to-end retrieval (hybrid scores, metadata filtering working)
 
 ### Phase 3: Text Embeddings & BM25
 
@@ -404,6 +410,66 @@ results = collection.query(
 - ChromaDB stores data in `data/chroma_db/` directory
 - Embeddings loaded once from pickle files during initialization
 - No re-embedding needed on reload
+
+### Phase 6: Multimodal Retrieval System
+
+#### Approach
+**Unified Multimodal Retrieval**: Combine BM25, semantic text search, and CLIP image search into a single retrieval system with score fusion.
+
+**Retrieval Pipeline**
+1. **Text Query Processing**:
+   - Tokenize query → BM25 scores
+   - Embed query → Semantic scores
+   - Normalize and fuse scores
+2. **Image Query Processing** (optional):
+   - Embed query text with CLIP → Image similarity scores
+   - Or embed query image → Find similar images
+3. **Score Fusion**:
+   - Combine text and image scores
+   - Return unified ranked results
+
+**Hybrid Text Retrieval**
+- **Formula**: `text_score = α * BM25_normalized + (1-α) * semantic_score`
+- **α parameter**: Default 0.4 (60% semantic, 40% BM25)
+- **BM25 normalization**: Min-max scaling to [0,1] range
+- **Semantic scores**: Already in [0,1] (cosine similarity with normalized embeddings)
+
+**Multimodal Fusion**
+- **Formula**: `final_score = β * text_score + (1-β) * image_score`
+- **β parameter**: Default 0.7 (70% text, 30% image)
+- **Use case**: User provides text query, system retrieves both relevant text chunks AND images
+
+**Retrieval Modes**
+1. **Text-only**: Uses hybrid BM25 + semantic (default)
+2. **Text-to-image**: Uses CLIP text encoder to find relevant images
+3. **Multimodal**: Combines text and image retrieval scores
+4. **Image-to-image**: Uses CLIP image encoder (for future image upload feature)
+
+**Metadata Filtering Support**
+- Filter by `article_id`: Get results from specific articles
+- Filter by `word_count`: Find longer/shorter chunks
+- Combine with score-based ranking
+
+**Output Format**
+```python
+{
+    "text_results": [
+        {
+            "chunk_id": "article_1_chunk_0",
+            "text": "...",
+            "score": 0.85,
+            "metadata": {...}
+        }
+    ],
+    "image_results": [
+        {
+            "image_path": "article_1_img_0.jpg",
+            "score": 0.72,
+            "metadata": {...}
+        }
+    ]
+}
+```
 
 ## Evaluation
 
