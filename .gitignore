@@ -219,6 +219,7 @@ __marimo__/
 RAG/
 
 # Project-specific data
+data/
 data/raw/
 data/images/
 data/processed/
